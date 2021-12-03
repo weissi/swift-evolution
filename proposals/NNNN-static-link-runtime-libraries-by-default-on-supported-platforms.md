@@ -59,6 +59,106 @@ We propose to deprecate `--static-swift-stdlib` and introduce a new flag `--disa
 
 Users that want to force static linking (as with `--static-swift-stdlib`) can use the long form `-Xswiftc -static-stdlib`.
 
+### Example
+
+Consider the following simple program:
+
+```bash
+root@4c64d6ba11f0:/tmp# cd test/
+root@4c64d6ba11f0:/tmp/test# swift package init --type executable
+Creating executable package: test
+Creating Package.swift
+Creating README.md
+Creating .gitignore
+Creating Sources/
+Creating Sources/test/main.swift
+Creating Tests/
+Creating Tests/testTests/
+Creating Tests/testTests/testTests.swift
+
+root@4c64d6ba11f0:/tmp/test# cat Sources/test/main.swift
+print("Hello, world!")
+```
+Building the program with default dynamic linking yields the following:
+
+```bash
+root@4c64d6ba11f0:/tmp/test# swift build -c release
+[3/3] Build complete!
+
+root@4c64d6ba11f0:/tmp/test# ll --block-size=K .build/release/test
+-rwxr-xr-x 1 root root 17K Dec  3 22:48 .build/release/test*
+
+root@4c64d6ba11f0:/tmp/test# ldd .build/release/test
+	linux-vdso.so.1 (0x00007ffc82be4000)
+	libswift_Concurrency.so => /usr/lib/swift/linux/libswift_Concurrency.so (0x00007f0f5cfb5000)
+	libswiftCore.so => /usr/lib/swift/linux/libswiftCore.so (0x00007f0f5ca55000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f0f5c85e000)
+	libdispatch.so => /usr/lib/swift/linux/libdispatch.so (0x00007f0f5c7fd000)
+	libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f0f5c7da000)
+	libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f0f5c7d4000)
+	libswiftGlibc.so => /usr/lib/swift/linux/libswiftGlibc.so (0x00007f0f5c7be000)
+	libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f0f5c5dc000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f0f5c48d000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f0f5c472000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f0f5d013000)
+	libicui18nswift.so.65 => /usr/lib/swift/linux/libicui18nswift.so.65 (0x00007f0f5c158000)
+	libicuucswift.so.65 => /usr/lib/swift/linux/libicuucswift.so.65 (0x00007f0f5bf55000)
+	libicudataswift.so.65 => /usr/lib/swift/linux/libicudataswift.so.65 (0x00007f0f5a4a2000)
+	librt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007f0f5a497000)
+	libBlocksRuntime.so => /usr/lib/swift/linux/libBlocksRuntime.so (0x00007f0f5a492000)
+```
+
+Building the program with static linking of the Swift runtime libraries yields the following:
+
+```bash
+root@4c64d6ba11f0:/tmp/test# swift build -c release --static-swift-stdlib
+[3/3] Build complete!
+
+root@4c64d6ba11f0:/tmp/test# ll --block-size=K .build/release/test
+-rwxr-xr-x 1 root root 35360K Dec  3 22:50 .build/release/test*
+
+root@4c64d6ba11f0:/tmp/test# ldd .build/release/test
+	linux-vdso.so.1 (0x00007fffdaafa000)
+	libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007fdd521c5000)
+	libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007fdd521a2000)
+	libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fdd51fc0000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fdd51e71000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fdd51e56000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fdd51c64000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007fdd54211000)
+```
+
+These snippets demonstrates the following:
+1. Statically linking of the Swift runtime libraries increases the binary size from 17K to ~35M.
+2. Statically linking of the Swift runtime libraries reduces the dependencies reported by `ldd` to core Linux libraries.
+
+This jump in binary size may be alarming at first sight, but since the program is not usable without the Swift runtime libraries, the actual size of the deployable unit is similar.
+
+```bash
+root@4c64d6ba11f0:/tmp/test# mkdir deps
+root@4c64d6ba11f0:/tmp/test# ldd ".build/release/test" | grep swift | awk '{print $3}' | xargs cp -Lv -t ./deps
+'/usr/lib/swift/linux/libswift_Concurrency.so' -> './deps/libswift_Concurrency.so'
+'/usr/lib/swift/linux/libswiftCore.so' -> './deps/libswiftCore.so'
+'/usr/lib/swift/linux/libdispatch.so' -> './deps/libdispatch.so'
+'/usr/lib/swift/linux/libswiftGlibc.so' -> './deps/libswiftGlibc.so'
+'/usr/lib/swift/linux/libicui18nswift.so.65' -> './deps/libicui18nswift.so.65'
+'/usr/lib/swift/linux/libicuucswift.so.65' -> './deps/libicuucswift.so.65'
+'/usr/lib/swift/linux/libicudataswift.so.65' -> './deps/libicudataswift.so.65'
+'/usr/lib/swift/linux/libBlocksRuntime.so' -> './deps/libBlocksRuntime.so'
+root@4c64d6ba11f0:/tmp/test# ll --block-size=K deps/
+total 42480K
+drwxr-xr-x 2 root root     4K Dec  3 22:59 ./
+drwxr-xr-x 6 root root     4K Dec  3 22:58 ../
+-rw-r--r-- 1 root root    17K Dec  3 22:59 libBlocksRuntime.so
+-rw-r--r-- 1 root root   432K Dec  3 22:59 libdispatch.so
+-rwxr-xr-x 1 root root 27330K Dec  3 22:59 libicudataswift.so.65*
+-rwxr-xr-x 1 root root  4030K Dec  3 22:59 libicui18nswift.so.65*
+-rwxr-xr-x 1 root root  2403K Dec  3 22:59 libicuucswift.so.65*
+-rwxr-xr-x 1 root root   520K Dec  3 22:59 libswift_Concurrency.so*
+-rwxr-xr-x 1 root root  7622K Dec  3 22:59 libswiftCore.so*
+-rwxr-xr-x 1 root root   106K Dec  3 22:59 libswiftGlibc.so*
+```
+
 ## Impact on existing packages
 
 The new behavior will take effect with a new version of SwiftPM, and packages build with that version will be linked accordingly.
@@ -74,9 +174,10 @@ Golang is a good example for creating fully statically linked programs, contribu
 Swift offers a flag for this linking mode: `-Xswiftc -static-executable`, but in reality Swift's ability to create fully statically linked programs is constraint.
 First, Swift's dependency on Glibc (on Linux) makes it impossible given the nature of Glibc. Golang chosen to implement its own version of libc which decouples it from the system well.
 Further, Swift's interoperability with C and system libraries make it difficult (impossible?) to create fully statically linked programs as the build system cannot _reliably_ unwind the dependency tree without information from the underlying dependency management system (e.g. yum, apt) which is often lacking.
-
 As Swift's ability to create fully statically linked programs improves, we should consider changing the default from `-Xswiftc -static-stdlib` to `-Xswiftc -static-executable`
 
-A more immediate future direction which would improve programs that need to use of FoundationXML and FoundationNetworking is to eliminate these modules system dependencies by replacing the dependency with native implementation. This is outside the scope of this proposal which focuses on SwiftPM's behavior.
+A more immediate future direction which would improve programs that need to use of FoundationXML and FoundationNetworking is to replace the system dependencies of these modules with native implementation. This is outside the scope of this proposal which focuses on SwiftPM's behavior.
 
-Another alternative is to do nothing and leave the default as they are. In practice, these proposal does not add new feature, only changes default behavior which is achievable with the right knowledge. That said, we believe that changing the default will make using Swift on non-Darwin platforms easier saving time and costs to Swift users on such platforms.
+Another alternative is to do nothing. In practice, this proposal does not add new features, it only changes default behavior which is already achievable with the right knowledge of build flags. That said, we believe that changing the default will make using Swift on non-Darwin platforms easier saving time and costs to Swift users on such platforms.
+
+The spelling of the new flag `--disable-static-swift-runtime` is open to alternative ideas, e.g. `--disable-static-swift-runtime-libraries`.
