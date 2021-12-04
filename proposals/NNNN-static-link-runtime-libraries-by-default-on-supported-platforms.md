@@ -16,15 +16,15 @@ On some platforms, such as Linux, this is often the preferred way to link progra
 
 ## Motivation
 
-Darwin based platform ship with the Swift runtime libraries in the shared cache. This allows building smaller Swift programs by dynamically linking the Swift runtime libraries.
+Darwin based platform ship with the Swift runtime libraries in the shared cache. This allows building smaller Swift programs by dynamically linking the Swift runtime libraries. The shared cache keeps the cost of loading these libraries dynamically low.
 
-Other platforms, such as Linux, do not have such shared cache and do not ship with the Swift runtime libraries. As such a deployment of Swift program (e.g. a web service built with Swift) on such platform required one of 3 non-convenient options:
+Other platforms, such as Linux, do not ship with the Swift runtime libraries. As such a deployment of Swift program (e.g. a web service built with Swift) on such platform required one of 3 non-convenient options:
 
 1. Package the application with a "bag of SOs" (the runtime libraries) along side the program.
 2. Statically link with the runtime libraries using the `--static-swift-stdlib` flag described above.
 3. Use a "runtime" docker image that contain the _correct version_ of the the runtime libraries.
 
-Out of the three options, the most convenient is #2 given that #1 requires manual intervention and/or additional wrapper scripts that use `ldd` to deduce the correct list of runtime libraries and #3 is version sensitive and as such easy to get wrong. #2 also has some performance advantages in cold start because there is less dynamic library loading that needs to be done, However this comes at a cost of bigger binaries.  
+Out of the three options, the most convenient is #2 given that #1 requires manual intervention and/or additional wrapper scripts that use `ldd` to deduce the correct list of runtime libraries and #3 is convenient but version sensitive. #2 also has cold start performance advantage  because there is less dynamic library loading. However #2 comes at a cost of bigger binaries.  
 
 Stepping outside the Swift ecosystem, deployment of statically linked programs is often the preferred way on server centric platforms such as Linux, as it dramatically simplifies deployment of server workloads. Golang and Rust both chose to statically link programs by default for this reason.
 
