@@ -16,7 +16,7 @@ On some platforms, such as Linux, this is often the preferred way to link progra
 
 ## Motivation
 
-Darwin based platform ship with the Swift runtime libraries in the shared cache. This allows building smaller Swift programs by dynamically linking the Swift runtime libraries. The shared cache keeps the cost of loading these libraries dynamically low.
+Darwin based platform ship with the Swift runtime libraries in the shared cache. This allows building smaller Swift programs by dynamically linking the Swift runtime libraries. The shared cache keeps the cost of loading these libraries low.
 
 Other platforms, such as Linux, do not ship with the Swift runtime libraries. As such a deployment of Swift program (e.g. a web service built with Swift) on such platform required one of 3 non-convenient options:
 
@@ -26,7 +26,7 @@ Other platforms, such as Linux, do not ship with the Swift runtime libraries. As
 
 Out of the three options, the most convenient is #2 given that #1 requires manual intervention and/or additional wrapper scripts that use `ldd` to deduce the correct list of runtime libraries and #3 is convenient but version sensitive. #2 also has cold start performance advantage  because there is less dynamic library loading. However #2 comes at a cost of bigger binaries.  
 
-Stepping outside the Swift ecosystem, deployment of statically linked programs is often the preferred way on server centric platforms such as Linux, as it dramatically simplifies deployment of server workloads. Golang and Rust both chose to statically link programs by default for this reason.
+Stepping outside the Swift ecosystem, deployment of statically linked programs is often the preferred way on server centric platforms such as Linux, as it dramatically simplifies deployment of server workloads. For reference, Go and Rust both chose to statically link programs by default for this reason.
 
 ## Proposed solution
 
@@ -34,8 +34,8 @@ We propose to make statically linking of the Swift runtime libraries the default
 
 Note this does not mean the resulting program is fully statically linked - only the Swift runtime libraries (stdlib, foundation, dispatch, etc) would be statically linked into the program, while external dependencies will continue to be dynamically linked and would remain the a concern left for the user when deploying the program. Such external dependencies include:
 1. Glibc: On Linux, Swift relies on Glibc to interact with the system and its not possible to fully statically link programs based on Glibc. In practice this is not usually not a problem since most/all Linux systems ship with a compatible Glibc.
-2. At this time, non-Darwin version of Foundation (aka libCoreFoundation) has two modules that rely on system dependencies (FoundationXML on libxml2 and FoundationNetwork on libcurl) which cannot be statically linked at this time and require to be installed on the target system.
-3. Any system dependencies the program itself brings (e.g. libsqlite, zlib) would not be statically linked and requires to be installed on the target system.
+2. At this time, non-Darwin version of Foundation (aka libCoreFoundation) has two modules that rely on system dependencies (`FoundationXML` on `libxml2` and `FoundationNetwork` on `libcurl`) which cannot be statically linked at this time and require to be installed on the target system.
+3. Any system dependencies the program itself brings (e.g. `libsqlite`, `zlib`) would not be statically linked and requires to be installed on the target system.
 
 ## Detailed design
 
@@ -163,16 +163,16 @@ drwxr-xr-x 6 root root     4K Dec  3 22:58 ../
 
 The new behavior will take effect with a new version of SwiftPM, and packages build with that version will be linked accordingly.
 
-* Deployment of applications using "bag of SOs" technique (#1 above) will continue to work as before (tho would be potentially redundant).
+* Deployment of applications using "bag of SOs" technique (#1 above) will continue to work as before (though would be potentially redundant).
 * Deployment of applications using explicit static linking (#2 above) will continue to work and emit a warning that its redundant.
-* Deployment of applications using docker "runtime" images (#3 above) will continue to work as before (tho would be redundant).
+* Deployment of applications using docker "runtime" images (#3 above) will continue to work as before (though would be redundant).
 
 ## Alternatives considered and future directions
 
 The most obvious question this proposal brings is why not fully statically link the program instead of statically link only the runtime libraries.
-Golang is a good example for creating fully statically linked programs, contributing to its success in the server ecosystem at large.
-Swift offers a flag for this linking mode: `-Xswiftc -static-executable`, but in reality Swift's ability to create fully statically linked programs is constraint.
-First, Swift's dependency on Glibc (on Linux) makes it impossible given the nature of Glibc. Golang chosen to implement its own version of libc which decouples it from the system well.
+Go is a good example for creating fully statically linked programs, contributing to its success in the server ecosystem at large.
+Swift offers a flag for this linking mode: `-Xswiftc -static-executable`, but in reality Swift's ability to create fully statically linked programs is constrained.
+First, Swift's dependency on Glibc (on Linux) makes it impossible given the nature of Glibc. Go chosen to implement its own version of libc which decouples it from the system well.
 Further, Swift's interoperability with C and system libraries make it difficult (impossible?) to create fully statically linked programs as the build system cannot _reliably_ unwind the dependency tree without information from the underlying dependency management system (e.g. yum, apt) which is often lacking.
 As Swift's ability to create fully statically linked programs improves, we should consider changing the default from `-Xswiftc -static-stdlib` to `-Xswiftc -static-executable`
 
